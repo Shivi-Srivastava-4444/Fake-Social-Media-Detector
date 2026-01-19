@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fake Profile Detector — Demo</title>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --accent:#7c3aed; --muted:#9aa6b2; --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,#071021 0%, #081426 60%); color:#e6eef6; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:28px}
+
+    .wrap{width:100%;max-width:1100px;display:grid;grid-template-columns:420px 1fr;gap:24px}
+
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.04); padding:18px; border-radius:12px; box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+
+    header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    header h1{font-size:18px;margin:0}
+    header p{margin:0;color:var(--muted);font-size:13px}
+
+    form .field{margin-bottom:12px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type=text], input[type=url], textarea, input[type=number], select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit;font-size:14px}
+    textarea{min-height:86px;resize:vertical}
+    .row{display:flex;gap:10px}
+    .row .col{flex:1}
+
+    .controls{display:flex;gap:8px;margin-top:8px}
+    button{background:var(--accent);border:none;padding:10px 12px;border-radius:8px;color:white;cursor:pointer}
+    .btn-secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+
+    /* result panel */
+    .result-panel{padding:18px}
+    .score{display:flex;align-items:center;gap:12px}
+    .score .meter{width:180px;height:18px;background:rgba(255,255,255,0.04);border-radius:999px;overflow:hidden}
+    .meter > span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#4f46e5);width:0%}
+    .score strong{font-size:32px}
+
+    .badge{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);font-size:13px}
+
+    .insights{margin-top:12px}
+    .insights li{margin-bottom:8px;color:var(--muted);font-size:14px}
+
+    .suggestions{margin-top:12px;background:linear-gradient(180deg, rgba(124,58,237,0.06), rgba(79,70,229,0.02));padding:12px;border-radius:8px}
+    .suggestions h4{margin:0 0 8px 0}
+
+    footer{margin-top:14px;color:var(--muted);font-size:13px}
+
+    /* responsive */
+    @media (max-width:980px){.wrap{grid-template-columns:1fr} .card{padding:12px}}
+
+    /* samples */
+    .sample-list{display:flex;flex-wrap:wrap;gap:8px}
+    .sample{background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:8px;font-size:13px;cursor:pointer}
+
+    .meta{display:flex;gap:8px;align-items:center}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <header>
+        <div>
+          <h1>Fake Profile Detector</h1>
+          <p>Intermediate demo — heuristics-based detection with explanations.</p>
+        </div>
+      </header>
+
+      <form id="profileForm" onsubmit="return false;">
+        <div class="field">
+          <label for="displayName">Display name</label>
+          <input id="displayName" type="text" placeholder="e.g. Priya Sharma" value="" />
+        </div>
+
+        <div class="field">
+          <label for="username">Username (handle)</label>
+          <input id="username" type="text" placeholder="e.g. priya_official123" />
+        </div>
+
+        <div class="field">
+          <label for="bio">Bio / About</label>
+          <textarea id="bio" placeholder="Short bio... (try emojis, links, or requests like 'follow me')"></textarea>
+        </div>
+
+        <div class="row">
+          <div class="col field">
+            <label for="followers">Followers</label>
+            <input id="followers" type="number" min="0" value="120" />
+          </div>
+          <div class="col field">
+            <label for="following">Following</label>
+            <input id="following" type="number" min="0" value="450" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col field">
+            <label for="posts">Posts</label>
+            <input id="posts" type="number" min="0" value="3" />
+          </div>
+          <div class="col field">
+            <label for="ageDays">Account age (days)</label>
+            <input id="ageDays" type="number" min="0" value="12" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Profile picture</label>
+          <div class="row">
+            <input id="picUrl" type="url" placeholder="Optional image URL (http...)" />
+            <button class="btn-secondary" id="checkPic">Check</button>
+          </div>
+          <div id="picStatus" style="margin-top:8px;color:var(--muted);font-size:13px"></div>
+        </div>
+
+        <div class="field">
+          <label for="externalLinks">External links in bio</label>
+          <select id="externalLinks">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3+</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="samplePosts">Sample recent post(s) (paste text)</label>
+          <textarea id="samplePosts" placeholder="Example post content — spammy messages or generic compliments...">Great post! Check out my profile 😊</textarea>
+        </div>
+
+        <div class="controls">
+          <button id="detect">Detect</button>
+          <button id="autoFill" class="btn-secondary">Load sample suspicious profile</button>
+          <button id="clear" class="btn-secondary">Clear</button>
+        </div>
+
+        <footer>
+          Tip: This is a heuristic tool meant for demonstration — not a substitute for full moderation pipelines.
+        </footer>
+      </form>
+    </section>
+
+    <aside class="card result-panel">
+      <div class="score">
+        <div style="flex:1">
+          <div class="meta"><span class="badge">Score</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+            <div class="meter"><span id="meterFill" style="width:0%"></span></div>
+            <strong id="scoreValue">—</strong>
+          </div>
+          <div style="margin-top:6px;color:var(--muted);font-size:13px" id="verdict">Awaiting input</div>
+        </div>
+      </div>
+
+      <div class="insights">
+        <h4 style="margin-bottom:8px">Why the score?</h4>
+        <ul id="insightsList"></ul>
+      </div>
+
+      <div class="suggestions" id="suggestions" style="display:none">
+        <h4>Suggestions to improve trust</h4>
+        <ul id="suggestTips"></ul>
+      </div>
+
+      <div style="margin-top:12px">
+        <h4 style="margin-bottom:6px">Quick samples</h4>
+        <div class="sample-list" id="samples">
+          <div class="sample" data-sample="clean">Real-looking account</div>
+          <div class="sample" data-sample="suspicious">Suspicious (bot-like)</div>
+          <div class="sample" data-sample="brand">Brand / Verified-looking</div>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <script>
+    // Utilities
+    const el = id => document.getElementById(id);
+    function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+    // Heuristics weights (intermediate-level)
+    const WEIGHTS = {
+      missingPic: 10,
+      recentAccount: 12,
+      lowPosts: 10,
+      followerFollowingRatio: 12,
+      usernamePattern: 10,
+      bioSuspicious: 14,
+      externalLinks: 8,
+      spammyPosts: 14
+    };
+
+    function assess(profile){
+      const insights=[];
+      let risk=0; // higher is more suspicious
+
+      // 1. Profile pic
+      if(!profile.picUrl){ risk+=WEIGHTS.missingPic; insights.push('No profile picture provided — many fake accounts omit real photos.'); }
+      else if(!profile.picGood){ risk += 0; insights.push('Profile picture provided and reachable.'); }
+
+      // 2. Account age
+      if(profile.ageDays <= 30){ risk += WEIGHTS.recentAccount; insights.push(`Very new account (${profile.ageDays} days) — new accounts are higher risk.`); }
+      else if(profile.ageDays <= 180){ risk += Math.floor(WEIGHTS.recentAccount/2); insights.push(`Relatively new account (${profile.ageDays} days).`); }
+
+      // 3. Posts
+      if(profile.posts <= 2){ risk += WEIGHTS.lowPosts; insights.push('Very few posts — suspicious for accounts claiming many followers.'); }
+      else if(profile.posts < 10){ risk += Math.floor(WEIGHTS.lowPosts/2); }
+
+      // 4. Follower/following ratio
+      const ratio = profile.following === 0 ? profile.followers : profile.followers / profile.following;
+      if(profile.following > 100 && ratio < 0.1){ risk += WEIGHTS.followerFollowingRatio; insights.push('Very low follower-to-following ratio — typical of follow-for-follow or bot farms.'); }
+      else if(ratio < 0.5){ risk += Math.floor(WEIGHTS.followerFollowingRatio/2); }
+
+      // 5. Username patterns
+      const username = profile.username || '';
+      const digitCount = (username.match(/\d/g)||[]).length;
+      const underscoreCount = (username.match(/_/g)||[]).length;
+      if(digitCount >= 4 || underscoreCount >=3 || /^user\d{3,}/i.test(username) || /^(?:official|real)[^a-z0-9]/i.test(username)){ risk += WEIGHTS.usernamePattern; insights.push('Username shows suspicious patterns (many digits/underscores or "official/real" prefixes).'); }
+
+      // 6. Bio suspicious keywords
+      const bio = (profile.bio||'').toLowerCase();
+      const bioFlags = [];
+      if(/follow for follow|follow4follow|f4f|subscribe|like for like|dm for follow|free followers|click here/.test(bio)) bioFlags.push('promotional/follow-exchange language');
+      const emojiOnly = /^\s*(?:[\u2700-\u27BF\u1F300-\u1F6FF\u1F900-\u1F9FF\u2600-\u26FF\s]+)\s*$/.test(bio);
+      if(emojiOnly) bioFlags.push('emoji-only bio');
+      const veryShort = bio.trim().length>0 && bio.trim().length < 8;
+      if(veryShort) bioFlags.push('very short bio');
+      if(bioFlags.length){ risk += WEIGHTS.bioSuspicious; insights.push('Bio contains: ' + bioFlags.join(', ') + '.'); }
+
+      // 7. External links
+      if(profile.externalLinks >= 2){ risk += WEIGHTS.externalLinks; insights.push('Multiple external links in bio — could be redirectors or affiliate links.'); }
+      else if(profile.externalLinks === 1){ insights.push('One external link in bio — check destination for suspicious domains.'); }
+
+      // 8. Sample posts (spammy phrases)
+      const postsText = (profile.samplePosts||'').toLowerCase();
+      if(/free followers|click here|visit my|buy followers|join my|earn money|dm for/.test(postsText)){
+        risk += WEIGHTS.spammyPosts; insights.push('Recent posts contain spammy or promotional language.');
+      }
+
+      // final score: map risk to 0-100 suspiciousness, then invert to trust score
+      const maxRisk = Object.values(WEIGHTS).reduce((a,b)=>a+b,0) + 10;
+      const suspiciousness = clamp(Math.round((risk / maxRisk) * 100), 0, 100);
+      const trustScore = 100 - suspiciousness;
+
+      return {trustScore, suspiciousness, insights, risk, ratio};
+    }
+
+    // UI glue
+    function readForm(){
+      return {
+        displayName: el('displayName').value.trim(),
+        username: el('username').value.trim(),
+        bio: el('bio').value.trim(),
+        followers: Number(el('followers').value)||0,
+        following: Number(el('following').value)||0,
+        posts: Number(el('posts').value)||0,
+        ageDays: Number(el('ageDays').value)||0,
+        picUrl: el('picUrl').value.trim(),
+        picGood: el('_picGood')?el('_picGood').value==='1':false,
+        externalLinks: Number(el('externalLinks').value)||0,
+        samplePosts: el('samplePosts').value.trim()
+      };
+    }
+
+    function updateUI(result){
+      const meter = el('meterFill');
+      const scoreEl = el('scoreValue');
+      const verdict = el('verdict');
+      const list = el('insightsList');
+      const suggestions = el('suggestions');
+      const tips = el('suggestTips');
+
+      meter.style.width = result.trustScore + '%';
+      scoreEl.textContent = result.trustScore;
+
+      list.innerHTML = '';
+      if(result.insights.length === 0){
+        const li = document.createElement('li'); li.textContent = 'No obvious red flags — looks fairly trustworthy.'; list.appendChild(li);
+      } else {
+        result.insights.forEach(it => { const li = document.createElement('li'); li.textContent = it; list.appendChild(li); });
+      }
+
+      // Verdict text
+      if(result.trustScore >= 75){ verdict.textContent = 'Likely genuine — low risk.'; suggestions.style.display='none'; }
+      else if(result.trustScore >= 45){ verdict.textContent = 'Possibly suspicious — exercise caution.'; suggestions.style.display='block'; }
+      else { verdict.textContent = 'Likely fake or risky — avoid interacting until verified.'; suggestions.style.display='block'; }
+
+      // Suggestions
+      tips.innerHTML = '';
+      const sarr = [];
+      if(result.trustScore < 75){
+        sarr.push('Ask for provenance: other social links, email verification, mutual contacts.');
+        sarr.push('Check profile picture via reverse image search.');
+        sarr.push('Avoid clicking external links until verified.');
+        sarr.push('Look for consistent posting history and engagement (comments from real accounts).');
+      }
+      sarr.forEach(s=>{ const li=document.createElement('li'); li.textContent=s; tips.appendChild(li); });
+    }
+
+    // image checker
+    document.getElementById('checkPic').addEventListener('click', function(e){
+      e.preventDefault();
+      const url = el('picUrl').value.trim();
+      const status = el('picStatus');
+      if(!url){ status.textContent='No image URL provided.'; return; }
+      status.textContent='Checking image...';
+      const img = new Image();
+      let done=false;
+      img.onload = ()=>{ done=true; status.textContent='Image loaded successfully.'; // store flag
+        // create hidden field to pass state
+        let f = el('_picGood'); if(!f){ f = document.createElement('input'); f.type='hidden'; f.id='_picGood'; document.body.appendChild(f);} f.value='1'; };
+      img.onerror = ()=>{ if(done) return; status.textContent='Could not load image (broken or blocked).'; let f = el('_picGood'); if(!f){ f = document.createElement('input'); f.type='hidden'; f.id='_picGood'; document.body.appendChild(f);} f.value='0'; };
+      // try to fetch by setting src
+      img.src = url;
+      // timeout fallback
+      setTimeout(()=>{ if(!done){ status.textContent='Timed out while loading image — may be blocked by CORS or unreachable.'; let f = el('_picGood'); if(!f){ f = document.createElement('input'); f.type='hidden'; f.id='_picGood'; document.body.appendChild(f);} f.value='0'; } }, 3000);
+    });
+
+    // detect
+    el('detect').addEventListener('click', function(e){
+      e.preventDefault();
+      const profile = readForm();
+      const res = assess(profile);
+      updateUI(res);
+    });
+
+    // quick samples
+    document.getElementById('samples').addEventListener('click', function(e){
+      const s = e.target.closest('.sample'); if(!s) return;
+      const type = s.dataset.sample;
+      if(type==='suspicious'){
+        el('displayName').value='Anu';
+        el('username').value='user_9999_1234';
+        el('bio').value='🔥✨ follow for follow! click link below 🙌';
+        el('followers').value='23'; el('following').value='800'; el('posts').value='1'; el('ageDays').value='7'; el('picUrl').value=''; el('externalLinks').value='3'; el('samplePosts').value='Follow me for free followers! click here';
+      } else if(type==='clean'){
+        el('displayName').value='Rohan Gupta';
+        el('username').value='rohangupta';
+        el('bio').value='Product designer • coffee lover • Mumbai';
+        el('followers').value='2340'; el('following').value='420'; el('posts').value='86'; el('ageDays').value='820'; el('picUrl').value='https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=512&h=512&fit=crop'; el('externalLinks').value='1'; el('samplePosts').value='Working on a new UI, feedback welcome.';
+      } else if(type==='brand'){
+        el('displayName').value='Acme Studios';
+        el('username').value='acme_studios_official';
+        el('bio').value='Official account — portfolio & bookings';
+        el('followers').value='120000'; el('following').value='12'; el('posts').value='1145'; el('ageDays').value='2200'; el('picUrl').value='https://images.unsplash.com/photo-1518770660439-4636190af475?w=512&h=512&fit=crop'; el('externalLinks').value='2'; el('samplePosts').value='New collection live — link in bio!';
+      }
+    });
+
+    // autofill suspicious
+    el('autoFill').addEventListener('click', function(e){ e.preventDefault(); document.querySelector('.sample[data-sample="suspicious"]').click(); });
+    el('clear').addEventListener('click', function(e){ e.preventDefault(); document.querySelectorAll('input[type=text], input[type=url], input[type=number], textarea').forEach(i=>i.value=''); el('picStatus').textContent=''; if(el('_picGood')) el('_picGood').value='0'; el('meterFill').style.width='0%'; el('scoreValue').textContent='—'; el('insightsList').innerHTML=''; el('verdict').textContent='Awaiting input'; el('suggestions').style.display='none'; });
+
+  </script>
+</body>
+</html>
